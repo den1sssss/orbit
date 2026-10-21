@@ -30,6 +30,8 @@ try {
   console.log(`▸ Publishing to ${repo} (gh-pages)…`)
   run('gh auth setup-git >/dev/null 2>&1 || true', { cwd: tmp })
   run(`git push -q -f https://github.com/${repo}.git gh-pages`, { cwd: tmp })
+  // Force-pushes don't always trigger a Pages build — request one explicitly.
+  run(`gh api -X POST repos/${repo}/pages/builds --silent || true`, { cwd: tmp })
 } finally {
   rmSync(tmp, { recursive: true, force: true })
 }
