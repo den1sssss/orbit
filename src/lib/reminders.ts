@@ -3,6 +3,8 @@
 // without a push server, so this runs only while the app is open.)
 import { useEffect } from 'react'
 import { addDaysISO, fmtTime, fromISO, occurrencesBetween, todayISO } from './dates'
+import { doneOn, isDueToday } from './habits'
+import { DATE_KIND_LABELS, upcomingDates } from './lifeDates'
 import { useStore } from './store'
 import { toast } from './ui'
 
@@ -80,6 +82,31 @@ function check() {
       fired.add(key)
       changed = true
       void notify(t.title, t.dueTime ? `Due at ${fmtTime(t.dueTime)}` : 'Due today')
+    }
+  }
+
+  // Important dates: remind at 09:00, `remindDays` before the date.
+  for (const u of upcomingDates(s.importantDates, 31, today)) {
+    const remindOn = addDaysISO(u.date, -u.item.remindDays)
+    const due = at(remindOn, '09:00')
+    const key = `d:${u.item.id}:${u.date}`
+    if (now >= due && now - due < 12 * GRACE_MS && !fired.has(key)) {
+      fired.add(key)
+      changed = true
+      const when = u.daysUntil === 0 ? 'today' : u.daysUntil === 1 ? 'tomorrow' : `in ${u.daysUntil} days`
+      void notify(u.item.title, `${DATE_KIND_LABELS[u.item.kind]} ${when}`)
+    }
+  }
+
+  // Habits with a reminder time that aren't done yet today.
+  for (const h of s.habits) {
+    if (!h.reminderTime || !isDueToday(h, today, s.settings.weekStartsOn) || doneOn(h, today)) continue
+    const due = at(today, h.reminderTime)
+    const key = `h:${h.id}:${today}`
+    if (now >= due && now - due < GRACE_MS && !fired.has(key)) {
+      fired.add(key)
+      changed = true
+      void notify(`${h.emoji ? h.emoji + ' ' : ''}${h.name}`, 'Time for your habit')
     }
   }
 

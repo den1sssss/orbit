@@ -3,7 +3,7 @@
 import { eachDay, occurrencesBetween, timeToMinutes } from './dates'
 import { paymentsInRange, type DueItem } from './finance'
 import { PRIORITY_ORDER } from './defaults'
-import type { CalendarEvent, ISODate, JournalEntry, PlannedPayment, Task } from './types'
+import type { CalendarEvent, Client, ColorKey, ImportantDate, ImportantDateKind, Invoice, ISODate, JournalEntry, PlannedPayment, Task } from './types'
 
 export interface EventOccurrence {
   event: CalendarEvent
@@ -79,4 +79,64 @@ export function dayAgenda(src: AgendaSource, date: ISODate): DayAgenda {
 /** Open tasks whose due date is before `today`. */
 export function overdueTasks(tasks: Task[], today: ISODate): Task[] {
   return sortTasks(tasks.filter((t) => t.status !== 'done' && t.dueDate && t.dueDate < today))
+}
+
+// ───────────────────────── Read-only calendar items from other modules ─────────────────────────
+
+const DATE_KIND_STYLE: Record<ImportantDateKind, { emoji: string; color: ColorKey }> = {
+  birthday: { emoji: '🎂', color: 'pink' },
+  anniversary: { emoji: '💞', color: 'red' },
+  renewal: { emoji: '🔁', color: 'amber' },
+  expiry: { emoji: '⏳', color: 'orange' },
+  holiday: { emoji: '🌴', color: 'green' },
+  other: { emoji: '📌', color: 'slate' },
+}
+
+/** Prefix of ids for items that live elsewhere (important dates, invoices). */
+export const VIRTUAL_EVENT = { date: 'date:', invoice: 'inv:' } as const
+
+export function isVirtualEvent(id: string): boolean {
+  return id.startsWith(VIRTUAL_EVENT.date) || id.startsWith(VIRTUAL_EVENT.invoice)
+}
+
+/**
+ * Important dates (yearly or one-off) and invoice due dates as all-day calendar items,
+ * so the calendar shows everything that matters on a day. They open their own screens.
+ */
+export function extraCalendarEvents(dates: ImportantDate[], invoices: Invoice[], clients: Client[]): CalendarEvent[] {
+  const out: CalendarEvent[] = []
+  for (const d of dates) {
+    const style = DATE_KIND_STYLE[d.kind]
+    out.push({
+      id: VIRTUAL_EVENT.date + d.id,
+      title: `${style.emoji} ${d.title}`,
+      type: 'reminder',
+      date: d.date,
+      allDay: true,
+      color: style.color,
+      recurrence: d.yearly ? { freq: 'yearly', interval: 1 } : { freq: 'none', interval: 1 },
+      exdates: [],
+      notes: d.notes,
+      createdAt: d.createdAt,
+      updatedAt: d.updatedAt,
+    })
+  }
+  for (const inv of invoices) {
+    if (inv.status !== 'sent' || !inv.dueDate) continue
+    const client = clients.find((c) => c.id === inv.clientId)
+    out.push({
+      id: VIRTUAL_EVENT.invoice + inv.id,
+      title: `💸 ${inv.number} due — ${client?.name ?? inv.title}`,
+      type: 'deadline',
+      date: inv.dueDate,
+      allDay: true,
+      color: 'indigo',
+      recurrence: { freq: 'none', interval: 1 },
+      exdates: [],
+      projectId: inv.projectId,
+      createdAt: inv.createdAt,
+      updatedAt: inv.updatedAt,
+    })
+  }
+  return out
 }

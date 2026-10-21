@@ -1,8 +1,8 @@
 import { Suspense, useEffect } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
-  BookHeart, CalendarDays, CheckCircle2, Cloud, CloudOff, House, Loader2, Lock, NotebookPen,
-  Plus, Search, Settings, Wallet, type LucideIcon,
+  Backpack, BookHeart, Bot, Briefcase, CalendarDays, ChartColumn, CheckCircle2, Cloud, CloudOff, House,
+  LayoutGrid, Loader2, Lock, NotebookPen, Plus, Search, Settings, Target, Wallet, type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/components/ui'
 import { EditorHost } from '@/components/editors/EditorHost'
@@ -31,6 +31,15 @@ const NAV: NavItem[] = [
   { to: '/money', label: 'Money', icon: Wallet },
 ]
 
+/** Second group in the sidebar: planning & growth modules. */
+const NAV_PLAN: NavItem[] = [
+  { to: '/business', label: 'Business', icon: Briefcase },
+  { to: '/growth', label: 'Goals & Habits', icon: Target },
+  { to: '/life', label: 'Life organizer', icon: Backpack },
+  { to: '/reports', label: 'Reports', icon: ChartColumn },
+  { to: '/assistant', label: 'Assistant', icon: Bot },
+]
+
 const MONEY_SUB = [
   { to: '/money', label: 'Overview', end: true },
   { to: '/money/transactions', label: 'Transactions' },
@@ -39,9 +48,14 @@ const MONEY_SUB = [
   { to: '/money/payments', label: 'Payments & subs' },
 ]
 
-// Phones get five tabs; Notes lives behind the Tasks tab (Tasks | Notes switch).
+// Phones get five tabs; Notes lives behind the Tasks tab (Tasks | Notes switch),
+// everything else (Journal, Business, Goals, Life, Reports…) behind More.
 const MOBILE_NAV: NavItem[] = [
-  NAV[0], NAV[1], { ...NAV[2], also: ['/notes'] }, NAV[5], NAV[4],
+  NAV[0], NAV[1], { ...NAV[2], also: ['/notes'] }, NAV[5],
+  {
+    to: '/more', label: 'More', icon: LayoutGrid,
+    also: ['/journal', '/business', '/growth', '/life', '/reports', '/assistant', '/search', '/settings'],
+  },
 ]
 
 function isActive(pathname: string, item: NavItem) {
@@ -62,7 +76,7 @@ function Sidebar() {
   const navigate = useNavigate()
   const inMoney = pathname.startsWith('/money')
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line bg-surface/60 px-3 py-5 backdrop-blur lg:flex">
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col overflow-y-auto border-r border-line bg-surface/60 px-3 py-5 backdrop-blur lg:flex">
       <div className="mb-5 flex items-center justify-between px-2">
         <div className="flex items-center gap-2.5">
           <img src="./icon.svg" alt="" className="h-7 w-7" />
@@ -112,8 +126,25 @@ function Sidebar() {
             </div>
           )
         })}
+        <p className="mb-1 mt-4 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted">Plan & grow</p>
+        {NAV_PLAN.map((item) => {
+          const active = isActive(pathname, item)
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={cn(
+                'flex h-9 items-center gap-3 rounded-lg px-2.5 text-sm font-medium transition-colors',
+                active ? 'bg-surface-2 text-ink' : 'text-ink-2 hover:bg-surface-2/70 hover:text-ink',
+              )}
+            >
+              <item.icon size={18} className={active ? 'text-accent-text' : 'text-muted'} />
+              {item.label}
+            </NavLink>
+          )
+        })}
       </nav>
-      <div className="mt-auto flex flex-col gap-0.5">
+      <div className="mt-auto flex flex-col gap-0.5 pt-4">
         <button
           type="button"
           onClick={() => navigate('/search')}
@@ -175,6 +206,9 @@ function BottomNav() {
 }
 
 function Fab() {
+  const { pathname } = useLocation()
+  // The assistant has its own composer at the bottom; the + would cover it.
+  if (pathname === '/assistant') return null
   return (
     <button
       type="button"

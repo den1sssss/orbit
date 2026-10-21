@@ -1,9 +1,12 @@
 // The "smart assistant": a rule-based daily briefing computed locally from
 // everything in the app. No data leaves the device.
 import {
-  AlarmClock, BookHeart, CalendarClock, CheckCircle2, Coffee, Flame, Gauge, PiggyBank,
-  Receipt, TrendingDown, TriangleAlert, Wallet, type LucideIcon,
+  AlarmClock, BookHeart, Briefcase, CalendarClock, CalendarHeart, CheckCircle2, Coffee, Flame, Gauge,
+  PiggyBank, Receipt, Target, TrendingDown, TriangleAlert, Wallet, type LucideIcon,
 } from 'lucide-react'
+import { invoiceState, receivables } from './business'
+import { doneOn, isDueToday, streak as habitStreak } from './habits'
+import { DATE_KIND_LABELS, upcomingDates, yearsLabel } from './lifeDates'
 import { dayAgenda, overdueTasks } from './agenda'
 import { addDaysISO, diffDays, fmtTime, greeting, minutesToTime, occurrencesBetween, timeToMinutes, todayISO } from './dates'
 import { PRIORITY_ORDER } from './defaults'
@@ -48,7 +51,14 @@ function topTask(tasks: Task[]): Task | undefined {
   return [...tasks].sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority])[0]
 }
 
-export function buildBriefing(data: AppData, now = new Date()): Briefing {
+/** Everything the briefing reads — keeps callers honest about what they pass. */
+export type BriefingInput = Pick<
+  AppData,
+  | 'settings' | 'tasks' | 'events' | 'journal' | 'transactions' | 'plannedPayments' | 'budgets'
+  | 'financeCategories' | 'goals' | 'habits' | 'invoices' | 'clients' | 'importantDates'
+>
+
+export function buildBriefing(data: BriefingInput, now = new Date()): Briefing {
   const today = todayISO()
   const money = (n: number) => formatMoney(n, data.settings.currency)
   const nowMin = now.getHours() * 60 + now.getMinutes()
@@ -254,6 +264,58 @@ export function buildBriefing(data: AppData, now = new Date()): Briefing {
   const prior = moodAvg(7, 14)
   if (recent !== undefined && prior !== undefined && prior - recent >= 0.8) {
     add({ id: 'mood', tone: 'warn', icon: BookHeart, rank: 4, to: '/journal', title: 'Your mood has dipped this week', detail: 'Plan something restorative and keep tomorrow’s list light.' })
+  }
+
+  // ── Habits
+  const habitsDue = data.habits.filter((h) => isDueToday(h, today, data.settings.weekStartsOn))
+  if (habitsDue.length) {
+    const left = habitsDue.filter((h) => !doneOn(h, today))
+    const atRisk = left
+      .map((h) => ({ h, s: habitStreak(h, data.settings.weekStartsOn, today) }))
+      .filter((x) => x.s.unit === 'day' && x.s.count >= 3)
+      .sort((a, b) => b.s.count - a.s.count)[0]
+    if (!left.length) {
+      add({ id: 'habits-done', tone: 'good', icon: Target, rank: 7, to: '/growth', title: 'All habits done today', detail: 'Consistency compounds — nice.' })
+    } else if (atRisk && now.getHours() >= 15) {
+      add({
+        id: 'habit-streak', tone: 'warn', icon: Flame, rank: 4, to: '/growth',
+        title: `Keep your ${atRisk.s.count}-day “${atRisk.h.name}” streak`,
+        detail: `${plural(left.length, 'habit')} still open today.`,
+      })
+    } else {
+      add({
+        id: 'habits-left', tone: 'info', icon: Target, rank: 6, to: '/growth',
+        title: `${plural(left.length, 'habit')} left today`,
+        detail: left.slice(0, 3).map((h) => h.name).join(', '),
+      })
+    }
+  }
+
+  // ── Business
+  const r = receivables(data.invoices, today)
+  if (r.overdueCount) {
+    const worst = data.invoices
+      .filter((i) => invoiceState(i, today) === 'overdue')
+      .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''))[0]
+    const client = data.clients.find((c) => c.id === worst?.clientId)
+    add({
+      id: 'invoices-overdue', tone: 'bad', icon: Briefcase, rank: 1, to: '/business/invoices',
+      title: `${plural(r.overdueCount, 'invoice')} overdue · ${money(r.overdue)}`,
+      detail: worst ? `Follow up with ${client?.name ?? worst.title} (${worst.number}) today.` : undefined,
+    })
+  }
+
+  // ── Important dates
+  const soonDates = upcomingDates(data.importantDates, 7, today)
+  if (soonDates.length) {
+    const u = soonDates[0]
+    const when = u.daysUntil === 0 ? 'today' : u.daysUntil === 1 ? 'tomorrow' : `in ${u.daysUntil} days`
+    const extra = yearsLabel(u)
+    add({
+      id: 'date-soon', tone: u.daysUntil <= 1 ? 'warn' : 'info', icon: CalendarHeart, rank: u.daysUntil <= 1 ? 2 : 5, to: '/life/dates',
+      title: `${u.item.title} ${when}`,
+      detail: [DATE_KIND_LABELS[u.item.kind], extra, u.item.kind === 'birthday' && u.daysUntil > 0 ? 'Plan a gift or message.' : null].filter(Boolean).join(' · '),
+    })
   }
 
   // ── Headline

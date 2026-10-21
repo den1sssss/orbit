@@ -12,6 +12,7 @@ import { CustomizeDashboard } from './dashboard/Customize'
 import { DataSettings } from './settings/DataSettings'
 import { MoneySettings } from './settings/MoneySettings'
 import { SecuritySettings } from './settings/SecuritySettings'
+import { AssistantSettingsSection } from './assistant/AssistantSettings'
 import { Row, Section } from './settings/Section'
 
 function NotificationRow() {
@@ -105,6 +106,7 @@ export function SettingsPage() {
 
         <MoneySettings />
         <SecuritySettings />
+        <AssistantSettingsSection />
         <DataSettings />
 
         <Section title="Install on your phone" icon={Smartphone} description="Orbit is a web app that installs like a native app and works offline.">

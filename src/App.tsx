@@ -5,6 +5,8 @@ import { LockScreen, Onboarding, Splash } from '@/components/layout/Gate'
 import { isEncrypted, lock } from '@/lib/persistence'
 import { useReminders } from '@/lib/reminders'
 import { useStore } from '@/lib/store'
+import { todayISO } from '@/lib/dates'
+import { upcomingPayments } from '@/lib/finance'
 import { useUI } from '@/lib/ui'
 import { Dashboard } from '@/pages/Dashboard'
 import { MoneyLayout } from '@/pages/money/MoneyLayout'
@@ -21,6 +23,12 @@ const GoalsPage = lazy(() => import('@/pages/money/Goals').then((m) => ({ defaul
 const PaymentsPage = lazy(() => import('@/pages/money/Payments').then((m) => ({ default: m.PaymentsPage })))
 const SearchPage = lazy(() => import('@/pages/Search').then((m) => ({ default: m.SearchPage })))
 const SettingsPage = lazy(() => import('@/pages/Settings').then((m) => ({ default: m.SettingsPage })))
+const MorePage = lazy(() => import('@/pages/More').then((m) => ({ default: m.MorePage })))
+const BusinessPage = lazy(() => import('@/pages/business').then((m) => ({ default: m.BusinessPage })))
+const GrowthPage = lazy(() => import('@/pages/growth').then((m) => ({ default: m.GrowthPage })))
+const LifePage = lazy(() => import('@/pages/life').then((m) => ({ default: m.LifePage })))
+const ReportsPage = lazy(() => import('@/pages/reports').then((m) => ({ default: m.ReportsPage })))
+const AssistantPage = lazy(() => import('@/pages/assistant').then((m) => ({ default: m.AssistantPage })))
 
 function useTheme() {
   const theme = useStore((s) => s.settings.theme)
@@ -53,12 +61,29 @@ function useAutoLock() {
   }, [minutes])
 }
 
+/** Number on the Home Screen icon (iOS 16.4+ / Chrome): tasks due today or overdue + overdue bills. */
+function useAppBadge(active: boolean) {
+  const tasks = useStore((s) => s.tasks)
+  const payments = useStore((s) => s.plannedPayments)
+  useEffect(() => {
+    const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> }
+    if (!active || !nav.setAppBadge) return
+    const today = todayISO()
+    const count =
+      tasks.filter((t) => t.status !== 'done' && t.dueDate && t.dueDate <= today).length +
+      upcomingPayments(payments, 0).filter((d) => d.overdue || d.daysUntil === 0).length
+    const p = count ? nav.setAppBadge(count) : nav.clearAppBadge?.()
+    p?.catch(() => { /* needs notification permission on iOS */ })
+  }, [active, tasks, payments])
+}
+
 export function App() {
   const status = useUI((s) => s.status)
   const onboarded = useStore((s) => s.settings.onboarded)
   useTheme()
   useAutoLock()
   useReminders(status === 'ready')
+  useAppBadge(status === 'ready')
 
   if (status === 'loading') return <Splash />
   if (status === 'locked') return <LockScreen />
@@ -83,6 +108,13 @@ export function App() {
           </Route>
           <Route path="search" element={<SearchPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="more" element={<MorePage />} />
+          {/* Each module handles its own sub-routes (e.g. /business/invoices). */}
+          <Route path="business/*" element={<BusinessPage />} />
+          <Route path="growth/*" element={<GrowthPage />} />
+          <Route path="life/*" element={<LifePage />} />
+          <Route path="reports/*" element={<ReportsPage />} />
+          <Route path="assistant" element={<AssistantPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

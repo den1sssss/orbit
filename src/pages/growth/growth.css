@@ -1,0 +1,17 @@
+/* Goals & Habits: small check-off flourishes. Motion only when the user allows it. */
+@keyframes growth-pop {
+  0% { transform: scale(0.55); opacity: 0.4; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+@keyframes growth-settle {
+  0% { transform: scale(1); }
+  40% { transform: scale(0.97); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .growth-pop { animation: growth-pop 0.32s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .growth-settle { animation: growth-settle 0.28s ease-out; }
+}

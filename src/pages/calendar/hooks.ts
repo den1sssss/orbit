@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { agendaRange, type DayAgenda } from '@/lib/agenda'
+import { agendaRange, extraCalendarEvents, type DayAgenda } from '@/lib/agenda'
 import { useStore } from '@/lib/store'
 import type { ISODate, Note } from '@/lib/types'
 import { DEFAULT_LAYERS, type LayerKey, type Layers } from './lib'
@@ -18,13 +18,17 @@ export function useCalendarData(start: ISODate, end: ISODate, layers: Layers): C
   const plannedPayments = useStore((s) => s.plannedPayments)
   const journal = useStore((s) => s.journal)
   const notes = useStore((s) => s.notes)
+  const importantDates = useStore((s) => s.importantDates)
+  const invoices = useStore((s) => s.invoices)
+  const clients = useStore((s) => s.clients)
   const { events: showEvents, tasks: showTasks, payments: showPayments, journal: showJournal } = layers
 
   const agenda = useMemo(
     () =>
       agendaRange(
         {
-          events: showEvents ? events : [],
+          // Birthdays, renewals and invoice due dates ride along with events.
+          events: showEvents ? [...events, ...extraCalendarEvents(importantDates, invoices, clients)] : [],
           tasks: showTasks ? tasks : [],
           plannedPayments: showPayments ? plannedPayments : [],
           journal: showJournal ? journal : [],
@@ -32,7 +36,7 @@ export function useCalendarData(start: ISODate, end: ISODate, layers: Layers): C
         start,
         end,
       ),
-    [events, tasks, plannedPayments, journal, start, end, showEvents, showTasks, showPayments, showJournal],
+    [events, tasks, plannedPayments, journal, importantDates, invoices, clients, start, end, showEvents, showTasks, showPayments, showJournal],
   )
 
   const notesByDate = useMemo(() => {

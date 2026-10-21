@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
-import { Button, Field, Input, Segmented, Select, Sheet, Textarea } from '@/components/ui'
+import { Button, cn, Field, Input, Segmented, Select, Sheet, Textarea } from '@/components/ui'
+import { describeRepeat, fromISO } from '@/lib/dates'
 import { PRIORITY_LABELS, REMINDER_OPTIONS, STATUS_LABELS } from '@/lib/defaults'
 import { makeTask, useStore } from '@/lib/store'
 import { removeWithUndo, toast } from '@/lib/ui'
-import type { ID, Priority, Task, TaskStatus } from '@/lib/types'
+import type { ID, Priority, Task, TaskRepeat, TaskStatus } from '@/lib/types'
 import { ChecklistEditor, ProjectSelect, QuickDates, TagsInput } from './fields'
 import { guardClose, useDraft } from './useDraft'
 
@@ -31,6 +32,7 @@ export function TaskEditor({ id, initial, onClose }: { id?: ID; initial?: Partia
       title,
       completedAt: draft.status === 'done' ? draft.completedAt ?? Date.now() : undefined,
       reminder: draft.dueDate ? draft.reminder : undefined,
+      repeat: draft.dueDate ? draft.repeat : undefined,
     }
     if (existing) patch('tasks', existing.id, final)
     else insert('tasks', final)
@@ -139,6 +141,14 @@ export function TaskEditor({ id, initial, onClose }: { id?: ID; initial?: Partia
           </Field>
         )}
 
+        {draft.dueDate && (
+          <RepeatField
+            value={draft.repeat}
+            dueDate={draft.dueDate}
+            onChange={(r) => set('repeat', r)}
+          />
+        )}
+
         <Field label="Project">
           <ProjectSelect value={draft.projectId} onChange={(v) => set('projectId', v)} />
         </Field>
@@ -161,5 +171,73 @@ export function TaskEditor({ id, initial, onClose }: { id?: ID; initial?: Partia
         <button type="submit" className="hidden" />
       </form>
     </Sheet>
+  )
+}
+
+const WEEKDAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+
+/** Repeat rule for a task: completing it schedules the next one. */
+function RepeatField({ value, dueDate, onChange }: {
+  value?: TaskRepeat
+  dueDate: string
+  onChange: (r: TaskRepeat | undefined) => void
+}) {
+  const freq = value?.freq ?? 'none'
+  const days = value?.weekdays?.length ? value.weekdays : [fromISO(dueDate).getDay()]
+  return (
+    <Field label="Repeat" hint={value ? `${describeRepeat(value)} — the next one is created when you complete this` : undefined}>
+      <div className="grid grid-cols-[1fr_auto] gap-3">
+        <Select
+          value={freq}
+          onChange={(e) => {
+            const f = e.target.value
+            onChange(f === 'none' ? undefined : { freq: f as TaskRepeat['freq'], interval: value?.interval ?? 1, weekdays: value?.weekdays })
+          }}
+        >
+          <option value="none">Does not repeat</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="yearly">Yearly</option>
+        </Select>
+        {value && (
+          <div className="flex items-center gap-2 text-sm text-muted">
+            every
+            <Input
+              type="number"
+              min={1}
+              className="w-16"
+              value={value.interval}
+              onChange={(e) => onChange({ ...value, interval: Math.max(1, Number(e.target.value) || 1) })}
+            />
+          </div>
+        )}
+      </div>
+      {value?.freq === 'weekly' && (
+        <div className="mt-1 flex gap-1.5">
+          {WEEKDAY_LETTERS.map((label, i) => {
+            const on = days.includes(i)
+            return (
+              <button
+                key={i}
+                type="button"
+                aria-pressed={on}
+                aria-label={['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][i]}
+                onClick={() => {
+                  const next = on ? days.filter((d) => d !== i) : [...days, i]
+                  onChange({ ...value, weekdays: next.length ? next : days })
+                }}
+                className={cn(
+                  'h-9 w-9 rounded-full text-xs font-semibold transition-colors',
+                  on ? 'bg-accent text-accent-ink' : 'bg-surface-2 text-ink-2',
+                )}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </Field>
   )
 }

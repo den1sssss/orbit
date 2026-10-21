@@ -230,7 +230,9 @@ export type BackupFile =
 
 export async function exportBackup(encrypt: boolean): Promise<Blob> {
   await flush()
-  const data = getData()
+  const raw = getData()
+  // The assistant API key stays on this device — never inside a backup file.
+  const data = { ...raw, settings: { ...raw.settings, assistant: { ...raw.settings.assistant, apiKey: undefined } } }
   let file: BackupFile
   if (encrypt && session) {
     const sealed = await seal(session.key, data)

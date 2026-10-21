@@ -46,7 +46,12 @@ only the app code is published; personal data never leaves the device.
 | **Money** | Income & expense tracking (amount, date, category, payment method, payee, notes, personal vs business), monthly summaries, charts, filters, CSV export. |
 | **Planner** | Monthly budgets per category with planned-vs-actual, safe-to-spend per day, savings target, savings goals with contributions, planned payments & subscriptions with "mark paid" (logs the expense and rolls the due date). |
 | **Search** | ⌘K / Ctrl K — searches tasks, notes, events, journal and transactions. |
-| **Settings** | Name, currency, week start, theme, money categories & payment methods, notifications, passcode, backups. |
+| **Business** | Clients, projects (fee, deadline, linked tasks/events/notes/money), invoices / freelance jobs / commissions with awaiting–overdue–paid states; "Mark paid" books business income. Monthly P&L kept apart from personal money. |
+| **Goals & Habits** | Habit tracker (daily, specific days, N× per week, counters like 8 glasses) with streaks, 12-week heatmap and consistency; goals by horizon (week → long-term) and life area with milestones / numbers / %; development plan by area; weekly & monthly review. |
+| **Life organizer** | Shopping / packing / errand lists ("2x milk" sets a quantity), important dates with yearly reminders (also shown in the calendar), a vault for documents & personal info (secret fields masked, passcode to reveal), subscriptions overview. |
+| **Reports** | Weekly / monthly reports across productivity, money, business, habits, goals and wellbeing, compared with the previous period, with plain-language highlights and a shareable summary. |
+| **Assistant** | Optional, with your own Anthropic API key: plan your day, flag what's urgent, review spending; proposes tasks/events you apply with a tap. Only a compact summary is sent when you ask; vault and journal text never are. |
+| **Settings** | Name, currency, week start, theme, money categories & payment methods, notifications, passcode, backups, assistant. |
 
 ### Privacy, saving and backup
 
@@ -75,8 +80,10 @@ src/
 
 Stack: React 18, TypeScript, Vite 6, Tailwind CSS 4, zustand, date-fns, Recharts, vite-plugin-pwa.
 
-## Next phases
+Also: repeating tasks, a badge on the Home Screen icon (tasks due + overdue bills), reminders for
+events, tasks, habits and important dates while the app is open, and a "More" tab on iPhone.
 
-Business & work manager (clients, projects, invoices, profit), goals & habit tracker,
-daily-life organizer (shopping lists, documents vault, important dates), reports & insights pages,
-and an optional AI assistant.
+## Ideas for later
+
+Russian / multilingual UI, a native iOS wrapper (push reminders when closed, Face ID), sync between
+devices, invoice PDFs, recurring income, bank CSV import.

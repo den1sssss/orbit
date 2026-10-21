@@ -1,8 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  BookHeart, CalendarDays, CheckCircle2, NotebookPen, Search as SearchIcon, Wallet, X, type LucideIcon,
+  Backpack, BookHeart, Briefcase, CalendarDays, CheckCircle2, NotebookPen, Search as SearchIcon, Target, Wallet, X,
+  type LucideIcon,
 } from 'lucide-react'
+import { INVOICE_STATE_LABELS, invoiceState } from '@/lib/business'
+import { describeSchedule } from '@/lib/habits'
+import { DATE_KIND_LABELS, nextOccurrence } from '@/lib/lifeDates'
+import { GOAL_HORIZON_LABELS, LIFE_AREA_LABELS } from '@/lib/defaults'
 import { CategoryIcon, Chip, cn, EmptyState, PageHeader } from '@/components/ui'
 import { describeRecurrence, fmtTime, relativeDay } from '@/lib/dates'
 import { MOOD_EMOJI, NOTE_CATEGORY_LABELS, STATUS_LABELS } from '@/lib/defaults'
@@ -10,7 +15,7 @@ import { useMoney } from '@/lib/format'
 import { useStore } from '@/lib/store'
 import { openEditor } from '@/lib/ui'
 
-type Kind = 'all' | 'tasks' | 'notes' | 'events' | 'journal' | 'money'
+type Kind = 'all' | 'tasks' | 'notes' | 'events' | 'journal' | 'money' | 'business' | 'growth' | 'life'
 
 interface Result {
   id: string
@@ -29,6 +34,9 @@ const KIND_META: Record<Exclude<Kind, 'all'>, { label: string; icon: LucideIcon 
   events: { label: 'Events', icon: CalendarDays },
   journal: { label: 'Journal', icon: BookHeart },
   money: { label: 'Transactions', icon: Wallet },
+  business: { label: 'Business', icon: Briefcase },
+  growth: { label: 'Goals & habits', icon: Target },
+  life: { label: 'Life', icon: Backpack },
 }
 
 /** Case-insensitive match of every word in the query. */
@@ -73,6 +81,13 @@ export function SearchPage() {
   const financeCategories = useStore((s) => s.financeCategories)
   const projects = useStore((s) => s.projects)
   const methods = useStore((s) => s.paymentMethods)
+  const clients = useStore((s) => s.clients)
+  const invoices = useStore((s) => s.invoices)
+  const habits = useStore((s) => s.habits)
+  const lifeGoals = useStore((s) => s.lifeGoals)
+  const lists = useStore((s) => s.lists)
+  const importantDates = useStore((s) => s.importantDates)
+  const vault = useStore((s) => s.vault)
 
   const setParam = (key: string, value: string) => {
     const next = new URLSearchParams(params)
@@ -138,9 +153,53 @@ export function SearchPage() {
           open: () => openEditor({ kind: 'transaction', id: t.id }),
         })
     }
+    // Business
+    for (const c of clients) {
+      if (m(c.name, c.company, c.email, c.phone, c.notes))
+        out.push({ id: c.id, kind: 'business', title: c.name, sub: ['Client', c.company, c.email].filter(Boolean).join(' · '), open: () => navigate('/business/clients') })
+    }
+    for (const p of projects) {
+      const client = clients.find((c) => c.id === p.clientId)?.name ?? p.client
+      if (m(p.name, p.description, client))
+        out.push({ id: p.id, kind: 'business', title: p.name, date: p.deadline, sub: ['Project', client, p.status].filter(Boolean).join(' · '), open: () => navigate(`/business/projects/${p.id}`) })
+    }
+    for (const inv of invoices) {
+      const client = clients.find((c) => c.id === inv.clientId)?.name
+      if (m(inv.number, inv.title, inv.notes, client, inv.amount.toFixed(2)))
+        out.push({
+          id: inv.id, kind: 'business', title: `${inv.number} · ${inv.title}`, date: inv.issueDate,
+          sub: [INVOICE_STATE_LABELS[invoiceState(inv)], client, inv.dueDate ? `Due ${relativeDay(inv.dueDate)}` : null].filter(Boolean).join(' · '),
+          right: <span className="text-sm font-medium tabular text-ink">{money(inv.amount)}</span>,
+          open: () => navigate('/business/invoices'),
+        })
+    }
+    // Goals & habits
+    for (const h of habits) {
+      if (m(h.name, h.unit, LIFE_AREA_LABELS[h.area]))
+        out.push({ id: h.id, kind: 'growth', title: `${h.emoji ? h.emoji + ' ' : ''}${h.name}`, sub: ['Habit', describeSchedule(h), h.archived ? 'Archived' : null].filter(Boolean).join(' · '), open: () => navigate('/growth/habits') })
+    }
+    for (const g of lifeGoals) {
+      if (m(g.title, g.why, g.milestones.map((x) => x.title), LIFE_AREA_LABELS[g.area]))
+        out.push({ id: g.id, kind: 'growth', title: g.title, date: g.targetDate, sub: ['Goal', GOAL_HORIZON_LABELS[g.horizon], LIFE_AREA_LABELS[g.area], g.status !== 'active' ? g.status : null].filter(Boolean).join(' · '), open: () => navigate('/growth/goals') })
+    }
+    // Life organizer (vault: titles and field labels only — never values)
+    for (const l of lists) {
+      const hits = l.items.filter((i) => m(i.title, i.note))
+      if (m(l.name) || hits.length)
+        out.push({ id: l.id, kind: 'life', title: l.name, sub: ['List', hits.length ? hits.slice(0, 3).map((i) => i.title).join(', ') : `${l.items.filter((i) => !i.done).length} open`].join(' · '), open: () => navigate(`/life/lists/${l.id}`) })
+    }
+    for (const d of importantDates) {
+      if (m(d.title, d.notes, DATE_KIND_LABELS[d.kind]))
+        out.push({ id: d.id, kind: 'life', title: d.title, date: nextOccurrence(d) ?? d.date, sub: [DATE_KIND_LABELS[d.kind], relativeDay(nextOccurrence(d) ?? d.date)].join(' · '), open: () => navigate(`/life/dates?open=${d.id}`) })
+    }
+    for (const v of vault) {
+      if (m(v.title, v.kind, v.fields.map((f) => f.label)))
+        out.push({ id: v.id, kind: 'life', title: v.title, sub: ['Vault', `${v.fields.length} fields`].join(' · '), open: () => navigate(`/life/vault?open=${v.id}`) })
+    }
     // Newest first within each kind.
     return out.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
-  }, [q, tasks, notes, events, journal, transactions, taskCategories, financeCategories, projects, methods, money, navigate])
+  }, [q, tasks, notes, events, journal, transactions, taskCategories, financeCategories, projects, methods, money, navigate,
+    clients, invoices, habits, lifeGoals, lists, importantDates, vault])
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {}

@@ -6,8 +6,8 @@ import { useStore } from '@/lib/store'
 import type { WidgetId } from '@/lib/types'
 import { CustomizeDashboard } from './dashboard/Customize'
 import {
-  BriefingWidget, BudgetWidget, GoalsWidget, JournalWidget, MoneyWidget, PaymentsWidget, QuickWidget,
-  TasksWidget, TodayWidget,
+  BriefingWidget, BudgetWidget, BusinessWidget, DatesWidget, GoalsWidget, HabitsWidget, JournalWidget, MoneyWidget,
+  PaymentsWidget, QuickWidget, TasksWidget, TodayWidget,
 } from './dashboard/Widgets'
 
 const WIDGETS: Record<WidgetId, { component: ComponentType; wide?: boolean }> = {
@@ -20,6 +20,9 @@ const WIDGETS: Record<WidgetId, { component: ComponentType; wide?: boolean }> = 
   payments: { component: PaymentsWidget },
   goals: { component: GoalsWidget },
   journal: { component: JournalWidget },
+  habits: { component: HabitsWidget },
+  dates: { component: DatesWidget },
+  business: { component: BusinessWidget },
 }
 
 export function Dashboard() {

@@ -1,10 +1,10 @@
 import type {
-  AppData, DashboardWidget, EventType, FinanceCategory, NoteCategory, PaymentMethod, Priority,
-  Settings, TaskCategory, TaskStatus, WidgetId,
+  AppData, ColorKey, DashboardWidget, EventType, FinanceCategory, GoalHorizon, LifeArea, NoteCategory,
+  PaymentMethod, Priority, Settings, TaskCategory, TaskStatus, WidgetId,
 } from './types'
 
 export const DEFAULT_WIDGETS: DashboardWidget[] = (
-  ['briefing', 'quick', 'today', 'tasks', 'money', 'budget', 'payments', 'goals', 'journal'] as WidgetId[]
+  ['briefing', 'quick', 'today', 'tasks', 'habits', 'money', 'budget', 'payments', 'business', 'dates', 'goals', 'journal'] as WidgetId[]
 ).map((id) => ({ id, visible: true }))
 
 export const WIDGET_LABELS: Record<WidgetId, string> = {
@@ -17,6 +17,9 @@ export const WIDGET_LABELS: Record<WidgetId, string> = {
   payments: 'Upcoming payments',
   goals: 'Savings goals',
   journal: 'Journal',
+  habits: 'Habits today',
+  dates: 'Important dates',
+  business: 'Business',
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -28,6 +31,7 @@ export const DEFAULT_SETTINGS: Settings = {
   monthlySavingsTarget: 0,
   autoLockMinutes: 5,
   onboarded: false,
+  assistant: { enabled: false, model: 'claude-opus-5-5' },
 }
 
 export const DEFAULT_TASK_CATEGORIES: TaskCategory[] = [
@@ -84,6 +88,15 @@ export function emptyData(): AppData {
     budgets: {},
     goals: [],
     plannedPayments: [],
+    clients: [],
+    invoices: [],
+    habits: [],
+    lifeGoals: [],
+    reviews: [],
+    lists: [],
+    importantDates: [],
+    vault: [],
+    assistantChat: [],
   }
 }
 
@@ -91,6 +104,7 @@ export function emptyData(): AppData {
 export function normalizeData(input: Partial<AppData>): AppData {
   const base = emptyData()
   const settings = { ...base.settings, ...(input.settings ?? {}) }
+  settings.assistant = { ...base.settings.assistant, ...(input.settings?.assistant ?? {}) }
   // Make sure every widget id exists exactly once.
   const known = new Set(settings.widgets.map((w) => w.id))
   for (const w of base.settings.widgets) if (!known.has(w.id)) settings.widgets.push({ ...w })
@@ -161,3 +175,35 @@ export const REMINDER_OPTIONS: { value: number; label: string }[] = [
   { value: 1440, label: '1 day before' },
   { value: 10080, label: '1 week before' },
 ]
+
+export const LIFE_AREAS: LifeArea[] = ['health', 'career', 'finance', 'relationships', 'learning', 'personal', 'business', 'fun']
+
+export const LIFE_AREA_LABELS: Record<LifeArea, string> = {
+  health: 'Health & fitness',
+  career: 'Career & work',
+  finance: 'Money',
+  relationships: 'Relationships',
+  learning: 'Learning',
+  personal: 'Personal growth',
+  business: 'Business',
+  fun: 'Fun & rest',
+}
+
+export const LIFE_AREA_COLORS: Record<LifeArea, ColorKey> = {
+  health: 'green',
+  career: 'blue',
+  finance: 'teal',
+  relationships: 'pink',
+  learning: 'violet',
+  personal: 'indigo',
+  business: 'orange',
+  fun: 'amber',
+}
+
+export const GOAL_HORIZON_LABELS: Record<GoalHorizon, string> = {
+  weekly: 'This week',
+  monthly: 'This month',
+  quarterly: 'This quarter',
+  yearly: 'This year',
+  'long-term': 'Long-term',
+}

@@ -1,4 +1,5 @@
 // Agenda rows shared by every calendar view (day panel, agenda list, phone week list).
+import { VIRTUAL_EVENT } from '@/lib/agenda'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Bell, BookHeart, MapPin, NotebookPen, PenLine, Repeat } from 'lucide-react'
@@ -33,7 +34,17 @@ function Marker({ children, stretch }: { children: ReactNode; stretch?: boolean 
 }
 
 export function openEvent(occ: EventOccurrence) {
-  openEditor({ kind: 'event', id: occ.event.id, occurrenceDate: occ.date })
+  const id = occ.event.id
+  // Items mirrored from other modules open where they live.
+  if (id.startsWith(VIRTUAL_EVENT.date)) {
+    window.location.hash = `#/life/dates?open=${id.slice(VIRTUAL_EVENT.date.length)}`
+    return
+  }
+  if (id.startsWith(VIRTUAL_EVENT.invoice)) {
+    window.location.hash = '#/business/invoices'
+    return
+  }
+  openEditor({ kind: 'event', id, occurrenceDate: occ.date })
 }
 
 /** "9:30 AM – 11:00 AM" or "All day". */

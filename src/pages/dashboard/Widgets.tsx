@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
-  ArrowDownLeft, ArrowUpRight, BookHeart, CalendarDays, CalendarPlus, CheckCircle2, ChevronRight,
-  NotebookPen, PiggyBank, Plus, Receipt, Repeat, Sparkles, Wallet, type LucideIcon,
+  ArrowDownLeft, ArrowUpRight, BookHeart, Briefcase, CalendarDays, CalendarHeart, CalendarPlus, Check,
+  CheckCircle2, ChevronRight, Flame, Minus, NotebookPen, PiggyBank, Plus, Receipt, Repeat, Sparkles, Target,
+  Wallet, type LucideIcon,
 } from 'lucide-react'
 import {
   Badge, Button, Card, CardHeader, CategoryIcon, Checkbox, cn, EmptyState, Progress, Stat,
@@ -12,11 +13,15 @@ import { fmtTime, relativeDay, timeToMinutes, todayISO, addDaysISO, currentMonth
 import { EVENT_TYPE_COLORS, MOOD_EMOJI, MOOD_LABELS } from '@/lib/defaults'
 import { budgetRows, budgetTone, goalProgress, monthTotals, savingsRate, upcomingPayments } from '@/lib/finance'
 import { useMoney } from '@/lib/format'
+import { businessTotals, invoiceState, receivables } from '@/lib/business'
+import { amountOn, doneOn, isDueToday, streak, weekCount } from '@/lib/habits'
+import { DATE_KIND_LABELS, upcomingDates, yearsLabel } from '@/lib/lifeDates'
+import { monthEnd, monthStart, relativeDistance } from '@/lib/dates'
 import { colorHex } from '@/lib/icons'
 import { buildBriefing, type InsightTone } from '@/lib/insights'
 import { makeTask, useStore } from '@/lib/store'
 import { openEditor, toast } from '@/lib/ui'
-import type { AppData, Mood } from '@/lib/types'
+import type { Mood } from '@/lib/types'
 
 /** Re-render every minute so time-based content stays fresh. */
 function useNow() {
@@ -53,10 +58,12 @@ export function BriefingWidget() {
     () => ({
       settings: s.settings, tasks: s.tasks, events: s.events, journal: s.journal, transactions: s.transactions,
       plannedPayments: s.plannedPayments, budgets: s.budgets, financeCategories: s.financeCategories, goals: s.goals,
+      habits: s.habits, invoices: s.invoices, clients: s.clients, importantDates: s.importantDates,
     }),
-    [s.settings, s.tasks, s.events, s.journal, s.transactions, s.plannedPayments, s.budgets, s.financeCategories, s.goals],
+    [s.settings, s.tasks, s.events, s.journal, s.transactions, s.plannedPayments, s.budgets, s.financeCategories, s.goals,
+      s.habits, s.invoices, s.clients, s.importantDates],
   )
-  const briefing = useMemo(() => buildBriefing(data as AppData, now), [data, now])
+  const briefing = useMemo(() => buildBriefing(data, now), [data, now])
   const [expanded, setExpanded] = useState(false)
   const shown = expanded ? briefing.insights : briefing.insights.slice(0, 4)
 
@@ -524,6 +531,220 @@ export function JournalWidget() {
         <Button size="sm" variant="ghost" className="mt-2 -ml-2" onClick={() => navigate(`/journal/${today}`)}>
           Add gratitude & reflection →
         </Button>
+      )}
+    </Card>
+  )
+}
+
+// ───────────────────────── Habits ─────────────────────────
+
+export function HabitsWidget() {
+  const habits = useStore((s) => s.habits)
+  const weekStartsOn = useStore((s) => s.settings.weekStartsOn)
+  const logHabit = useStore((s) => s.logHabit)
+  const today = todayISO()
+  const due = useMemo(
+    () => habits.filter((h) => isDueToday(h, today, weekStartsOn)).sort((a, b) => a.order - b.order),
+    [habits, today, weekStartsOn],
+  )
+  const done = due.filter((h) => doneOn(h, today)).length
+
+  return (
+    <Card>
+      <CardHeader
+        title="Habits today"
+        icon={Target}
+        subtitle={due.length ? `${done} of ${due.length} done` : undefined}
+        action={<LinkMore to="/growth">Open</LinkMore>}
+      />
+      {due.length === 0 ? (
+        <EmptyState
+          compact
+          title={habits.length ? 'Nothing due today' : 'No habits yet'}
+          description={habits.length ? 'Enjoy the rest day.' : 'Small daily routines add up — start with one.'}
+          action={!habits.length && <Link to="/growth/habits"><Button size="sm" icon={Plus}>Add a habit</Button></Link>}
+        />
+      ) : (
+        <>
+          <Progress value={done / due.length} tone={done === due.length ? 'good' : 'accent'} className="mb-3" label="Habits done today" />
+          <ul className="-mx-2 flex flex-col">
+            {due.map((h) => {
+              const amount = amountOn(h, today)
+              const isDone = doneOn(h, today)
+              const st = streak(h, weekStartsOn, today)
+              const counter = h.target > 1
+              return (
+                <li key={h.id} className="flex items-center gap-3 rounded-xl px-2 py-1.5">
+                  <button
+                    type="button"
+                    role={counter ? undefined : 'checkbox'}
+                    aria-checked={counter ? undefined : isDone}
+                    aria-label={counter ? `Log one ${h.unit ?? 'time'} of ${h.name}` : `Mark ${h.name} done`}
+                    onClick={() => logHabit(h.id, today, counter ? Math.min(h.target, amount + 1) : isDone ? 0 : 1)}
+                    className={cn(
+                      'flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors',
+                      isDone ? 'border-transparent text-white' : 'border-line-strong text-ink-2',
+                    )}
+                    style={isDone ? { background: colorHex(h.color) } : undefined}
+                  >
+                    {isDone ? <Check size={16} strokeWidth={3} /> : counter ? <Plus size={16} /> : null}
+                  </button>
+                  <span className="min-w-0 flex-1">
+                    <span className={cn('block truncate text-sm', isDone ? 'text-muted' : 'text-ink')}>
+                      {h.emoji ? `${h.emoji} ` : ''}{h.name}
+                    </span>
+                    <span className="block text-xs text-muted">
+                      {counter
+                        ? `${amount}/${h.target}${h.unit ? ` ${h.unit}` : ''}`
+                        : h.schedule.kind === 'weekly'
+                          ? `${weekCount(h, today, weekStartsOn)}/${h.schedule.times} this week`
+                          : isDone ? 'Done' : 'To do'}
+                    </span>
+                  </span>
+                  {counter && amount > 0 && !isDone && (
+                    <button
+                      type="button"
+                      aria-label={`Undo one ${h.name}`}
+                      onClick={() => logHabit(h.id, today, amount - 1)}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-ink"
+                    >
+                      <Minus size={15} />
+                    </button>
+                  )}
+                  {st.count >= 2 && (
+                    <span className="flex items-center gap-0.5 text-xs font-medium tabular text-warn" title={`${st.count}-${st.unit} streak`}>
+                      <Flame size={13} /> {st.count}
+                    </span>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </>
+      )}
+    </Card>
+  )
+}
+
+// ───────────────────────── Important dates ─────────────────────────
+
+export function DatesWidget() {
+  const dates = useStore((s) => s.importantDates)
+  const upcoming = useMemo(() => upcomingDates(dates, 45).slice(0, 4), [dates])
+  return (
+    <Card>
+      <CardHeader title="Important dates" icon={CalendarHeart} subtitle="Next 45 days" action={<LinkMore to="/life/dates" />} />
+      {upcoming.length === 0 ? (
+        <EmptyState
+          compact
+          title={dates.length ? 'Nothing coming up' : 'Never miss a birthday'}
+          description={dates.length ? undefined : 'Add birthdays, anniversaries and renewals — Orbit reminds you in time.'}
+          action={!dates.length && <Link to="/life/dates?new=1"><Button size="sm" icon={Plus}>Add a date</Button></Link>}
+        />
+      ) : (
+        <ul className="-mx-2 flex flex-col">
+          {upcoming.map((u) => (
+            <li key={u.item.id + u.date}>
+              <Link to="/life/dates" className="flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-surface-2">
+                <span className={cn(
+                  'flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-xl text-center leading-none',
+                  u.daysUntil <= 1 ? 'bg-warn-soft text-warn' : 'bg-surface-2 text-ink-2',
+                )}>
+                  <span className="text-[10px] font-semibold uppercase">{fmtMonth(u.date.slice(0, 7), 'MMM')}</span>
+                  <span className="text-[15px] font-semibold tabular">{Number(u.date.slice(8))}</span>
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-ink">{u.item.title}</span>
+                  <span className="block truncate text-xs text-muted">
+                    {[DATE_KIND_LABELS[u.item.kind], yearsLabel(u)].filter(Boolean).join(' · ')}
+                  </span>
+                </span>
+                <span className={cn('shrink-0 text-xs font-medium', u.daysUntil <= 1 ? 'text-warn' : 'text-muted')}>
+                  {relativeDistance(u.date)}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  )
+}
+
+// ───────────────────────── Business ─────────────────────────
+
+export function BusinessWidget() {
+  const txs = useStore((s) => s.transactions)
+  const invoices = useStore((s) => s.invoices)
+  const clients = useStore((s) => s.clients)
+  const markInvoicePaid = useStore((s) => s.markInvoicePaid)
+  const unmarkInvoicePaid = useStore((s) => s.unmarkInvoicePaid)
+  const money = useMoney()
+  const month = currentMonth()
+  const today = todayISO()
+  const t = useMemo(() => businessTotals(txs, monthStart(month), monthEnd(month)), [txs, month])
+  const r = useMemo(() => receivables(invoices, today), [invoices, today])
+  const open = useMemo(
+    () => invoices
+      .filter((i) => ['pending', 'overdue'].includes(invoiceState(i, today)))
+      .sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'))
+      .slice(0, 3),
+    [invoices, today],
+  )
+  const empty = !invoices.length && !t.income && !t.expenses
+
+  return (
+    <Card>
+      <CardHeader title="Business" icon={Briefcase} subtitle={fmtMonth(month)} action={<LinkMore to="/business">Open</LinkMore>} />
+      {empty ? (
+        <EmptyState
+          compact
+          title="Track clients & invoices"
+          description="Freelance jobs, commissions and pending payments — with profit kept apart from personal money."
+          action={<Link to="/business/invoices?new=1"><Button size="sm" icon={Plus}>New invoice</Button></Link>}
+        />
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            <Stat label="Revenue" value={money(t.income, { compact: true })} />
+            <Stat label="Profit" value={money(t.profit, { compact: true })} tone={t.profit < 0 ? 'bad' : 'neutral'} />
+            <Stat
+              label="Owed to you"
+              value={money(r.pending, { compact: true })}
+              hint={r.overdueCount ? `${r.overdueCount} overdue` : undefined}
+              tone={r.overdueCount ? 'bad' : 'neutral'}
+            />
+          </div>
+          {open.length > 0 && (
+            <ul className="-mx-2 mt-3 flex flex-col border-t border-line pt-2">
+              {open.map((inv) => {
+                const overdue = invoiceState(inv, today) === 'overdue'
+                const client = clients.find((c) => c.id === inv.clientId)
+                return (
+                  <li key={inv.id} className="flex items-center gap-3 rounded-xl px-2 py-2">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-ink">{client?.name ?? inv.title}</span>
+                      <span className={cn('block truncate text-xs', overdue ? 'text-bad' : 'text-muted')}>
+                        {inv.number}{inv.dueDate ? ` · ${overdue ? 'overdue ' : 'due '}${relativeDistance(inv.dueDate)}` : ''}
+                      </span>
+                    </span>
+                    <span className="text-sm tabular text-ink">{money(inv.amount)}</span>
+                    <Button
+                      size="sm"
+                      variant="soft"
+                      onClick={() => {
+                        markInvoicePaid(inv.id)
+                        toast('Payment recorded as income', { action: { label: 'Undo', onClick: () => unmarkInvoicePaid(inv.id) } })
+                      }}
+                    >
+                      Paid
+                    </Button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </>
       )}
     </Card>
   )

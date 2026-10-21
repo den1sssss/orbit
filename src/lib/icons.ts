@@ -3,8 +3,9 @@ import {
   HandCoins, HeartPulse, Home, Laptop, Lightbulb, type LucideIcon, Package, PawPrint,
   PiggyBank, Plane, Receipt, Repeat, Shirt, ShoppingBag, ShoppingCart, Smartphone,
   Sparkles, TrendingUp, Utensils, Wallet, Wifi, Wrench, Baby, Fuel, BadgePercent,
+  HeartHandshake, Palmtree, Sprout,
 } from 'lucide-react'
-import type { ColorKey } from './types'
+import type { ColorKey, LifeArea } from './types'
 
 /** Icons available for finance categories. Keys are stored in data. */
 export const CATEGORY_ICONS: Record<string, LucideIcon> = {
@@ -76,4 +77,15 @@ export function tint(key: ColorKey | undefined, alpha = 0.14): string {
   const hex = colorHex(key)
   const n = parseInt(hex.slice(1), 16)
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
+}
+
+export const LIFE_AREA_ICONS: Record<LifeArea, LucideIcon> = {
+  health: HeartPulse,
+  career: Briefcase,
+  finance: PiggyBank,
+  relationships: HeartHandshake,
+  learning: GraduationCap,
+  personal: Sprout,
+  business: TrendingUp,
+  fun: Palmtree,
 }

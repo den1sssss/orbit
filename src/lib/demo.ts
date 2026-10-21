@@ -1,7 +1,10 @@
 // Realistic sample data relative to today, so every screen can be explored.
-import { addDaysISO, fromISO, monthStart, shiftMonth, todayISO, toISO } from './dates'
+import { addDaysISO, eachDay, fromISO, monthStart, shiftMonth, todayISO, toISO, weekKey } from './dates'
 import { emptyData } from './defaults'
-import { makeEvent, makeJournal, makeNote, makeTask, makeTransaction, uid } from './store'
+import {
+  makeClient, makeEvent, makeHabit, makeImportantDate, makeInvoice, makeJournal, makeLifeGoal, makeList, makeNote,
+  makeTask, makeTransaction, makeVaultItem, uid,
+} from './store'
 import type { AppData, Mood, PlannedPayment, Transaction } from './types'
 
 function rng(seed: number) {
@@ -33,9 +36,13 @@ export function buildDemoData(keep: Pick<AppData, 'settings'>): AppData {
   data.settings = { ...keep.settings, onboarded: true, monthlySavingsTarget: 800 }
 
   // ── Projects
-  const acme = { id: uid(), name: 'Acme website redesign', color: 'indigo' as const, client: 'Acme Co.', status: 'active' as const, createdAt: Date.now() }
+  const acmeClient = makeClient({ name: 'Acme Co.', company: 'Acme Co.', email: 'tom@acme.example', phone: '+1 555 0100', color: 'indigo', notes: 'Main contact: Tom (marketing).' })
+  const lena = makeClient({ name: 'Lena Petrova', email: 'lena@example.com', color: 'orange', notes: 'Coaching — 4-session pack.' })
+  const studio = makeClient({ name: 'Studio Nine', company: 'Studio Nine LLC', email: 'hello@studionine.example', color: 'teal' })
+  data.clients = [acmeClient, lena, studio]
+  const acme = { id: uid(), name: 'Acme website redesign', color: 'indigo' as const, clientId: acmeClient.id, client: 'Acme Co.', status: 'active' as const, fee: 6500, deadline: d(30), createdAt: Date.now() }
   const store = { id: uid(), name: 'Online store', color: 'teal' as const, client: 'My business', status: 'active' as const, createdAt: Date.now() }
-  const coaching = { id: uid(), name: 'Coaching clients', color: 'orange' as const, status: 'active' as const, createdAt: Date.now() }
+  const coaching = { id: uid(), name: 'Coaching clients', color: 'orange' as const, clientId: lena.id, status: 'active' as const, fee: 1280, createdAt: Date.now() }
   data.projects = [acme, store, coaching]
 
   // ── Tasks
@@ -69,7 +76,6 @@ export function buildDemoData(keep: Pick<AppData, 'settings'>): AppData {
     makeEvent({ title: 'Dentist', type: 'appointment', date: d(3), startTime: '15:30', endTime: '16:15', location: 'Smile Dental, 12 Oak St.', reminder: 60 }),
     makeEvent({ title: 'Store: Q4 launch deadline', type: 'deadline', date: d(9), allDay: true, projectId: store.id }),
     makeEvent({ title: 'Dinner with friends', type: 'event', date: d(5), startTime: '19:30', endTime: '22:00', location: 'Olive & Co.' }),
-    makeEvent({ title: 'Mom’s birthday', type: 'reminder', date: d(12), allDay: true, recurrence: { freq: 'yearly', interval: 1 } }),
     makeEvent({ title: 'Monthly money review', type: 'personal', date: onDay(shiftMonth(thisMonth, -2), 1), startTime: '18:00', endTime: '18:30', recurrence: { freq: 'monthly', interval: 1 } }),
     makeEvent({ title: 'Coaching session — Lena', type: 'meeting', date: d(1), startTime: '11:00', endTime: '12:00', projectId: coaching.id }),
   ]
@@ -190,6 +196,76 @@ export function buildDemoData(keep: Pick<AppData, 'settings'>): AppData {
     { id: uid(), name: 'Emergency fund', target: 10000, color: 'green', createdAt: Date.now(), contributions: contributions([4800, 500, 400, 500]) },
     { id: uid(), name: 'Japan trip', target: 4000, targetDate: toISO(fromISO(onDay(shiftMonth(thisMonth, 8), 15))), color: 'pink', createdAt: Date.now(), contributions: contributions([600, 300, 300]) },
     { id: uid(), name: 'New laptop', target: 2400, targetDate: onDay(shiftMonth(thisMonth, 4), 1), color: 'blue', createdAt: Date.now(), contributions: contributions([500, 400]) },
+  ]
+
+  // ── Business: invoices & pending payments
+  data.invoices = [
+    makeInvoice({ number: 'INV-0001', title: 'Homepage design — milestone 1', kind: 'invoice', clientId: acmeClient.id, projectId: acme.id, amount: 1950, issueDate: d(-40), dueDate: d(-26), status: 'paid', paidDate: d(-27) }),
+    makeInvoice({ number: 'INV-0002', title: 'Homepage design — milestone 2', kind: 'invoice', clientId: acmeClient.id, projectId: acme.id, amount: 1800, issueDate: d(-9), dueDate: d(5), status: 'sent' }),
+    makeInvoice({ number: 'INV-0003', title: 'Coaching pack (4 sessions)', kind: 'freelance', clientId: lena.id, projectId: coaching.id, amount: 320, issueDate: d(-20), dueDate: d(-6), status: 'sent' }),
+    makeInvoice({ number: 'INV-0004', title: 'Brand illustrations', kind: 'freelance', clientId: studio.id, amount: 650, issueDate: today, status: 'draft' }),
+    makeInvoice({ number: 'INV-0005', title: 'Referral commission — Q3', kind: 'commission', amount: 150, issueDate: d(-3), dueDate: d(12), status: 'sent' }),
+  ]
+
+  // ── Habits with ~4 weeks of history
+  const habitLog = (rate: number, target = 1, scheduled: (iso: string) => boolean = () => true) => {
+    const log: Record<string, number> = {}
+    for (const day of eachDay(d(-34), d(-1))) {
+      if (scheduled(day) && r() < rate) log[day] = target
+      else if (target > 1 && scheduled(day) && r() < 0.5) log[day] = Math.max(1, Math.round(target * r()))
+    }
+    return log
+  }
+  const isWorkday = (iso: string) => { const w = fromISO(iso).getDay(); return w >= 1 && w <= 5 }
+  const created = Date.now() - 35 * 86400000
+  data.habits = [
+    makeHabit({ name: 'Drink water', emoji: '💧', color: 'blue', area: 'health', target: 8, unit: 'glasses', order: 0, createdAt: created, log: { ...habitLog(0.7, 8), [today]: 3 } }),
+    makeHabit({ name: 'Walk 30 minutes', emoji: '🚶', color: 'green', area: 'health', order: 1, createdAt: created, reminderTime: '18:00', log: { ...habitLog(0.85), [today]: 1 } }),
+    makeHabit({ name: 'Read 20 pages', emoji: '📚', color: 'violet', area: 'learning', schedule: { kind: 'weekdays', days: [1, 2, 3, 4, 5] }, order: 2, createdAt: created, log: habitLog(0.75, 1, isWorkday) }),
+    makeHabit({ name: 'Gym', emoji: '🏋️', color: 'orange', area: 'health', schedule: { kind: 'weekly', times: 3 }, order: 3, createdAt: created, log: habitLog(0.42) }),
+    makeHabit({ name: 'No phone after 22:00', emoji: '🌙', color: 'indigo', area: 'personal', order: 4, createdAt: created, log: habitLog(0.6) }),
+  ]
+
+  // ── Personal goals & a weekly review
+  data.lifeGoals = [
+    makeLifeGoal({ title: 'Launch the Q4 product line', why: 'Holiday season is 40% of yearly store revenue.', horizon: 'monthly', area: 'business', targetDate: d(9), measure: 'milestones', milestones: [
+      { id: uid(), title: 'Pick 12 products', done: true }, { id: uid(), title: 'Product photos', done: true },
+      { id: uid(), title: 'Write descriptions', done: false }, { id: uid(), title: 'Launch email', done: false },
+    ] }),
+    makeLifeGoal({ title: 'Read 12 books this year', horizon: 'yearly', area: 'learning', targetDate: `${today.slice(0, 4)}-12-31`, measure: 'number', current: 9, target: 12, unit: 'books' }),
+    makeLifeGoal({ title: 'Run a 10K', why: 'Feel fit and have more energy for work.', horizon: 'quarterly', area: 'health', targetDate: d(60), measure: 'manual', progress: 40 }),
+    makeLifeGoal({ title: 'Inbox zero every Friday', horizon: 'weekly', area: 'career', targetDate: d((12 - fromISO(today).getDay()) % 7 || 7), measure: 'milestones', milestones: [
+      { id: uid(), title: 'Work inbox', done: true }, { id: uid(), title: 'Personal inbox', done: false },
+    ] }),
+    makeLifeGoal({ title: 'Build a 6-month emergency fund', horizon: 'long-term', area: 'finance', measure: 'manual', progress: 62 }),
+  ]
+  const lastWeek = addDaysISO(today, -7)
+  data.reviews = [{
+    id: uid(), period: 'week', key: weekKey(lastWeek), rating: 4, createdAt: Date.now(), updatedAt: Date.now(),
+    wins: 'Shipped the Acme mockups draft; 5 gym sessions.', challenges: 'Too many meetings on Wednesday.',
+    lessons: 'Block deep work before noon.', focus: 'Finish product descriptions; follow up on overdue invoice.',
+  }]
+
+  // ── Life organizer
+  const item = (title: string, done = false, qty?: string) => ({ id: uid(), title, done, qty })
+  data.lists = [
+    makeList({ name: 'Groceries', kind: 'shopping', color: 'green', pinned: true, items: [item('Oat milk', false, '2'), item('Eggs', true, '12'), item('Spinach'), item('Coffee beans'), item('Greek yogurt'), item('Bananas', true)] }),
+    makeList({ name: 'Weekend errands', kind: 'errands', color: 'amber', items: [item('Return parcel'), item('Pick up dry cleaning'), item('Buy birthday gift for Mom')] }),
+    makeList({ name: 'Japan trip packing', kind: 'packing', color: 'pink', items: [item('Passport'), item('Rail pass'), item('Power adapter'), item('Comfortable shoes')] }),
+  ]
+  data.importantDates = [
+    makeImportantDate({ title: 'Mom’s birthday', kind: 'birthday', date: `1968-${d(12).slice(5)}`, yearly: true, remindDays: 3 }),
+    makeImportantDate({ title: 'Alex’s birthday', kind: 'birthday', date: `1994-${d(2).slice(5)}`, yearly: true, remindDays: 1 }),
+    makeImportantDate({ title: 'Wedding anniversary', kind: 'anniversary', date: `2019-${d(41).slice(5)}`, yearly: true, remindDays: 7 }),
+    makeImportantDate({ title: 'Passport expires', kind: 'expiry', date: d(150), yearly: false, remindDays: 60 }),
+    makeImportantDate({ title: 'Domain renewal', kind: 'renewal', date: d(40), yearly: true, remindDays: 7 }),
+  ]
+  const field = (label: string, value: string, secret = false) => ({ id: uid(), label, value, secret })
+  data.vault = [
+    makeVaultItem({ title: 'Passport', kind: 'id', pinned: true, expiresOn: d(150), fields: [field('Full name', 'Sample Name'), field('Number', 'AB 000000', true), field('Issued', '2017-03-14')] }),
+    makeVaultItem({ title: 'Home Wi-Fi', kind: 'home', fields: [field('Network', 'Orbit-Home'), field('Password', 'sample-wifi-pass', true)] }),
+    makeVaultItem({ title: 'Health insurance', kind: 'insurance', expiresOn: d(45), fields: [field('Provider', 'Example Health'), field('Policy number', 'EH-0000-0000', true), field('Hotline', '+1 555 0199')] }),
+    makeVaultItem({ title: 'Car', kind: 'vehicle', fields: [field('Plate', 'SAMPLE 01'), field('VIN', '0000000000000000', true)] }),
   ]
 
   return data

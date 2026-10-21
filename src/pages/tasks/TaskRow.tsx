@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactNode } from 'react'
 import {
-  ArrowRight, Bell, CalendarDays, Clock, Copy, Flag, ListChecks, Pencil, Sun, Trash2,
+  ArrowRight, Bell, CalendarDays, Clock, Copy, Flag, ListChecks, Pencil, Repeat, Sun, Trash2,
 } from 'lucide-react'
 import { Badge, Checkbox, cn, ColorDot, Menu, type MenuItem } from '@/components/ui'
 import { addDaysISO, fmtTime, relativeDay } from '@/lib/dates'
@@ -133,6 +133,9 @@ export function TaskMeta({
     parts.push(<span key={`#${tag}`} className="text-muted">#{tag}</span>)
   }
   if (task.tags.length > 3) parts.push(<span key="#more">+{task.tags.length - 3}</span>)
+  if (task.repeat && !done) {
+    parts.push(<Repeat key="r" size={12.5} aria-label="Repeats" />)
+  }
   if (task.dueDate && task.reminder !== undefined && !done) {
     parts.push(<Bell key="b" size={12.5} aria-label="Reminder set" />)
   }

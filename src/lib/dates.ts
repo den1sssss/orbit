@@ -3,7 +3,7 @@ import {
   endOfMonth, endOfWeek, format, getDaysInMonth, isValid, parse, startOfMonth,
   startOfWeek,
 } from 'date-fns'
-import type { CalendarEvent, ISODate, MonthKey, PaymentRecurrence } from './types'
+import type { CalendarEvent, ISODate, MonthKey, PaymentRecurrence, TaskRepeat } from './types'
 
 /**
  * Language for weekday/month names. The UI is English, so names stay English even on a
@@ -240,4 +240,49 @@ export function monthlyFactor(rec: PaymentRecurrence): number {
     case 'yearly': return 1 / 12
     case 'none': return 0
   }
+}
+
+// ───────────────────────── Weeks & repeating tasks ─────────────────────────
+
+/** ISO week key, e.g. '2026-W43' (weeks start Monday, week 1 contains Jan 4). */
+export function weekKey(iso: ISODate): string {
+  const d = fromISO(iso)
+  const day = (d.getDay() + 6) % 7 // Mon = 0
+  const thursday = addDays(d, 3 - day)
+  const firstThursday = new Date(thursday.getFullYear(), 0, 4)
+  const week = 1 + Math.round((differenceInCalendarDays(thursday, firstThursday) - 3 + ((firstThursday.getDay() + 6) % 7)) / 7)
+  return `${thursday.getFullYear()}-W${String(week).padStart(2, '0')}`
+}
+
+/** Next due date of a repeating task after `due`. */
+export function nextRepeatDate(due: ISODate, r: TaskRepeat): ISODate {
+  const n = Math.max(1, r.interval || 1)
+  const d = fromISO(due)
+  switch (r.freq) {
+    case 'daily':
+      return toISO(addDays(d, n))
+    case 'monthly':
+      return toISO(addMonths(d, n))
+    case 'yearly':
+      return toISO(addMonths(d, 12 * n))
+    case 'weekly': {
+      const days = r.weekdays && r.weekdays.length ? [...r.weekdays].sort() : [d.getDay()]
+      // Next listed weekday later this week, else first listed weekday N weeks on.
+      const later = days.find((w) => w > d.getDay())
+      if (later !== undefined) return toISO(addDays(d, later - d.getDay()))
+      const weekStart = addDays(d, -d.getDay())
+      return toISO(addDays(weekStart, 7 * n + days[0]))
+    }
+  }
+}
+
+export function describeRepeat(r: TaskRepeat): string {
+  const n = Math.max(1, r.interval || 1)
+  const unit = { daily: 'day', weekly: 'week', monthly: 'month', yearly: 'year' }[r.freq]
+  let s = n === 1 ? `Every ${unit}` : `Every ${n} ${unit}s`
+  if (r.freq === 'weekly' && r.weekdays && r.weekdays.length) {
+    const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    s += ` on ${[...r.weekdays].sort().map((x) => names[x]).join(', ')}`
+  }
+  return s
 }
