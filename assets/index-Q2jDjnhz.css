@@ -1,0 +1,1 @@
+@keyframes growth-pop{0%{transform:scale(.55);opacity:.4}60%{transform:scale(1.15);opacity:1}to{transform:scale(1)}}@keyframes growth-settle{0%{transform:scale(1)}40%{transform:scale(.97)}to{transform:scale(1)}}@media(prefers-reduced-motion:no-preference){.growth-pop{animation:growth-pop .32s cubic-bezier(.2,.8,.2,1)}.growth-settle{animation:growth-settle .28s ease-out}}
